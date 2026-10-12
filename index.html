@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#080b18">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
+<title>NEON RUSH — One More Run</title>
+<style>
+  :root { color-scheme: dark; --cyan:#4df5ff; --pink:#ff4d9d; --gold:#ffd166; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:#080b18; color:#f4f7ff; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; overflow:hidden; }
+  #wrap { width:100vw; height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:10px; gap:8px; }
+  header { width:min(100%,520px); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .brand { font-weight:950; letter-spacing:2px; font-size:clamp(16px,4vw,23px); text-shadow:0 0 16px #4df5ff66; }
+  .brand span { color:var(--cyan); }
+  .pill { border:1px solid #27324f; background:#11172b; border-radius:999px; padding:7px 11px; font-size:12px; color:#c7d2ee; white-space:nowrap; }
+  #gamebox { position:relative; width:min(100%,520px); height:min(72dvh,780px); min-height:360px; border:1px solid #263354; border-radius:20px; overflow:hidden; background:#090e21; box-shadow:0 0 35px #101e47aa; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+  #hud { position:absolute; inset:12px 12px auto; display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+  .stat { min-width:70px; text-shadow:0 2px 8px #000; }
+  .stat small { display:block; color:#91a2c9; font-size:10px; letter-spacing:1.5px; font-weight:800; }
+  .stat strong { font-size:23px; line-height:1.1; font-variant-numeric:tabular-nums; }
+  #rightstats { text-align:right; }
+  #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:22px; background:linear-gradient(180deg,#080b18bb,#080b18dd); }
+  .panel { width:100%; max-width:340px; text-align:center; }
+  .eyebrow { color:var(--cyan); letter-spacing:3px; font-size:11px; font-weight:900; }
+  h1 { margin:7px 0; font-size:clamp(30px,8vw,45px); line-height:1; font-weight:1000; letter-spacing:-1.5px; }
+  h1 em { font-style:normal; color:var(--cyan); text-shadow:0 0 22px #4df5ff77; }
+  .desc { color:#b3c0df; line-height:1.55; font-size:13px; margin:12px auto 18px; max-width:280px; }
+  button { border:0; font:inherit; cursor:pointer; }
+  .mainbtn { width:100%; padding:14px 16px; border-radius:12px; color:#041016; font-weight:950; letter-spacing:1.2px; background:linear-gradient(90deg,#4df5ff,#8affd0); box-shadow:0 5px 22px #4df5ff30; }
+  .mainbtn:active { transform:scale(.98); }
+  .hint { color:#7f91bb; font-size:11px; margin-top:13px; line-height:1.5; }
+  #controls { width:min(100%,520px); display:flex; gap:10px; }
+  .ctrl { flex:1; padding:13px 8px; background:#11172b; border:1px solid #263354; color:#e9f2ff; border-radius:13px; font-weight:850; }
+  .ctrl span { color:var(--cyan); font-size:18px; vertical-align:-1px; }
+  footer { width:min(100%,520px); display:flex; justify-content:space-between; color:#7182a9; font-size:10px; padding:0 2px; }
+  .hidden { display:none !important; }
+  @media (max-height:650px) { #gamebox { height:64dvh; min-height:300px; } #controls .ctrl { padding:9px; } .desc { margin:8px auto 12px; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><div class="brand">NEON <span>RUSH</span></div><div class="pill">⚡ ONE MORE RUN</div></header>
+  <div id="gamebox">
+    <canvas id="game"></canvas>
+    <div id="hud">
+      <div class="stat"><small>SCORE</small><strong id="score">0</strong></div>
+      <div id="rightstats" class="stat"><small>BEST</small><strong id="best">0</strong><small style="margin-top:7px">⚡ <span id="coins">0</span> COINS</small></div>
+    </div>
+    <div id="overlay">
+      <div class="panel" id="startpanel">
+        <div class="eyebrow">DODGE • COLLECT • SURVIVE</div>
+        <h1>NEON<br><em>RUSH</em></h1>
+        <p class="desc">The longer you survive, the faster it gets. Grab coins, dodge the red blocks, and chase your high score.</p>
+        <button class="mainbtn" id="start">START RUN</button>
+        <div class="hint">◀ ▶ Move between lanes<br>Collect cyan coins • Gold orbs give a shield</div>
+      </div>
+      <div class="panel hidden" id="overpanel">
+        <div class="eyebrow">RUN COMPLETE</div>
+        <h1 id="resulttitle">SO CLOSE!</h1>
+        <p class="desc" id="resultdesc">You can beat that score.</p>
+        <button class="mainbtn" id="again">RUN IT BACK ↻</button>
+        <div class="hint">A little better every run. That's the game.</div>
+      </div>
+    </div>
+  </div>
+  <div id="controls">
+    <button class="ctrl" id="left"><span>◀</span> LEFT</button>
+    <button class="ctrl" id="right">RIGHT <span>▶</span></button>
+  </div>
+  <footer><span>Made for the next high-score legend.</span><span>Tip: tap left or right</span></footer>
+</div>
+<script>
+(() => {
+ const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+ const box = document.getElementById('gamebox');
+ const overlay = document.getElementById('overlay'), startpanel = document.getElementById('startpanel'), overpanel = document.getElementById('overpanel');
+ const scoreEl = document.getElementById('score'), bestEl = document.getElementById('best'), coinsEl = document.getElementById('coins');
+ let W=360,H=600,dpr=1, running=false, last=0, score=0, coins=0, best=Number(localStorage.getItem('neonRushBest')||0);
+ let player, objects=[], particles=[], roadOffset=0, spawn=0, elapsed=0, shield=0, shake=0;
+ bestEl.textContent=best;
+ function resize(){
+   const r=box.getBoundingClientRect(); dpr=Math.min(window.devicePixelRatio||1,2);
+   W=r.width; H=r.height; canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
+   ctx.setTransform(dpr,0,0,dpr,0,0);
+   if(player) player.y=H*.79;
+ }
+ window.addEventListener('resize',resize); resize();
+ const laneX = lane => W*(.22 + lane*.28);
+ function reset(){
+   score=0; coins=0; elapsed=0; spawn=.4; roadOffset=0; objects=[]; particles=[]; shield=0; shake=0;
+   player={lane:1,x:laneX(1),y:H*.79,r:Math.max(10,W*.027),target:1,trail:[]};
+   scoreEl.textContent='0'; coinsEl.textContent='0';
+ }
+ function startGame(){
+   reset(); running=true; overlay.classList.add('hidden'); last=performance.now(); requestAnimationFrame(loop);
+ }
+ function move(dir){ if(!running)return; player.target=Math.max(0,Math.min(2,player.target+dir)); }
+ document.getElementById('start').addEventListener('click',startGame);
+ document.getElementById('again').addEventListener('click',startGame);
+ document.getElementById('left').addEventListener('pointerdown',e=>{e.preventDefault();move(-1)});
+ document.getElementById('right').addEventListener('pointerdown',e=>{e.preventDefault();move(1)});
+ canvas.addEventListener('pointerdown',e=>{if(!running)return; const r=canvas.getBoundingClientRect(); move(e.clientX-r.left<r.width/2?-1:1)});
+ window.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')move(-1);if(e.key==='ArrowRight'||e.key==='d')move(1);if((e.key===' '||e.key==='Enter')&&!running)startGame()});
+ function addParticle(x,y,color,n=8){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*170,vy:(Math.random()-.5)*170,life:.35+Math.random()*.45,color,r:1+Math.random()*3})}
+ function spawnObject(){
+   let lane=Math.floor(Math.random()*3), roll=Math.random();
+   let type=roll<.67?'block':roll<.92?'coin':'shield';
+   if(type==='coin' && Math.random()<.5){ lane=Math.floor(Math.random()*3); }
+   objects.push({lane,x:laneX(lane),y:-35,type,r:type==='block'?W*.06:W*.027,passed:false,spin:Math.random()*6});
+ }
+ function endGame(){
+   running=false; if(score>best){best=score;localStorage.setItem('neonRushBest',best);bestEl.textContent=best;}
+   document.getElementById('resulttitle').textContent=score>=best && score>0?'NEW BEST!':'SO CLOSE!';
+   document.getElementById('resultdesc').textContent=`Score ${score} • ${coins} coins collected. One more run could beat it.`;
+   startpanel.classList.add('hidden'); overpanel.classList.remove('hidden'); overlay.classList.remove('hidden');
+ }
+ function draw(){
+   ctx.clearRect(0,0,W,H);
+   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#0a1028');bg.addColorStop(1,'#080b18');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+   // distant neon skyline
+   for(let i=0;i<15;i++){let bw=W/13, x=(i*W/12)%W;let bh=30+((i*37)%90);ctx.fillStyle=i%2?'#101b37':'#0d1730';ctx.fillRect(x,H*.43-bh,bw-3,bh);}
+   // road and lane dividers
+   ctx.beginPath();ctx.moveTo(W*.08,0);ctx.lineTo(W*.92,0);ctx.lineTo(W*.98,H);ctx.lineTo(W*.02,H);ctx.closePath();ctx.fillStyle='#0d1429';ctx.fill();
+   ctx.strokeStyle='#243355';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W*.08,0);ctx.lineTo(W*.02,H);ctx.moveTo(W*.92,0);ctx.lineTo(W*.98,H);ctx.stroke();
+   ctx.setLineDash([22,20]);ctx.lineDashOffset=-roadOffset;ctx.strokeStyle='#29385a';ctx.lineWidth=2;
+   for(let lane=0;lane<2;lane++){let x=W*(.36+lane*.28);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}ctx.setLineDash([]);
+   // objects
+   for(const o of objects){
+     if(o.type==='block'){
+       ctx.save();ctx.shadowBlur=18;ctx.shadowColor='#ff426f';ctx.fillStyle='#ff426f';
+       let s=o.r*1.6;roundRect(ctx,o.x-s/2,o.y-s/2,s,s,7);ctx.fill();
+       ctx.strokeStyle='#ffb0c1';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
+     } else if(o.type==='coin'){
+       ctx.save();ctx.translate(o.x,o.y);ctx.rotate(Math.sin(o.spin)*.25);ctx.shadowBlur=18;ctx.shadowColor='#4df5ff';ctx.fillStyle='#4df5ff';
+       ctx.beginPath();ctx.arc(0,0,o.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#eaffff';ctx.beginPath();ctx.arc(-o.r*.25,-o.r*.25,o.r*.25,0,Math.PI*2);ctx.fill();ctx.restore();
+     } else {
+       ctx.save();ctx.shadowBlur=20;ctx.shadowColor='#ffd166';ctx.strokeStyle='#ffd166';ctx.lineWidth=3;ctx.beginPath();ctx.arc(o.x,o.y,o.r*1.35,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff1bd';ctx.beginPath();ctx.arc(o.x,o.y,o.r*.6,0,Math.PI*2);ctx.fill();ctx.restore();
+     }
+   }
+   // player trail and player
+   if(player){
+     player.trail.forEach((p,i)=>{ctx.globalAlpha=(i/player.trail.length)*.28;ctx.fillStyle=shield>0?'#ffd166':'#4df5ff';ctx.beginPath();ctx.arc(p.x,p.y,player.r*(i/player.trail.length),0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;
+     ctx.save();ctx.shadowBlur=22;ctx.shadowColor=shield>0?'#ffd166':'#4df5ff';
+     ctx.fillStyle=shield>0?'#ffd166':'#4df5ff';ctx.beginPath();ctx.moveTo(player.x,player.y-player.r*1.5);ctx.lineTo(player.x+player.r,player.y+player.r);ctx.lineTo(player.x,player.y+player.r*.55);ctx.lineTo(player.x-player.r,player.y+player.r);ctx.closePath();ctx.fill();
+     ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(player.x,player.y,player.r*.25,0,Math.PI*2);ctx.fill();
+     if(shield>0){ctx.strokeStyle='#ffd166';ctx.lineWidth=2;ctx.beginPath();ctx.arc(player.x,player.y,player.r*1.7,0,Math.PI*2);ctx.stroke();}
+     ctx.restore();
+   }
+   particles.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;
+   if(shake>0){ /* visual shake is intentionally subtle */ }
+ }
+ function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+ function loop(now){
+   if(!running)return;
+   let dt=Math.min((now-last)/1000,.035);last=now;elapsed+=dt;
+   let speed=230+Math.min(elapsed*8,210);roadOffset=(roadOffset+speed*dt)%42;
+   score=Math.floor(elapsed*10+coins*25);scoreEl.textContent=score;
+   if(shield>0)shield=Math.max(0,shield-dt);
+   player.x += (laneX(player.target)-player.x)*Math.min(1,dt*18);
+   player.trail.push({x:player.x,y:player.y+10});if(player.trail.length>7)player.trail.shift();
+   spawn-=dt;if(spawn<=0){spawnObject();spawn=Math.max(.31,.78-elapsed*.008)+Math.random()*.25;}
+   for(let i=objects.length-1;i>=0;i--){
+     const o=objects[i];o.y+=speed*dt;o.spin+=dt*5;
+     if(!o.passed && Math.abs(o.x-player.x)<(o.type==='block'?player.r+o.r*.65:player.r+o.r) && Math.abs(o.y-player.y)<(o.type==='block'?player.r+o.r*.7:player.r+o.r)){
+       if(o.type==='block'){
+         if(shield>0){shield=0;addParticle(o.x,o.y,'#ffd166',18);objects.splice(i,1);continue;}
+         addParticle(player.x,player.y,'#ff426f',24);endGame();return;
+       }
+       if(o.type==='coin'){coins++;coinsEl.textContent=coins;addParticle(o.x,o.y,'#4df5ff',10);}
+       else {shield=5;addParticle(o.x,o.y,'#ffd166',14);}
+       objects.splice(i,1);continue;
+     }
+     if(o.y>H+50)objects.splice(i,1);
+   }
+   for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)particles.splice(i,1);}
+   draw();requestAnimationFrame(loop);
+ }
+ // decorative idle screen
+ function idle(){
+   if(running)return; roadOffset=(roadOffset+.35)%42;
+   ctx.clearRect(0,0,W,H);
+   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#0a1028');bg.addColorStop(1,'#080b18');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+   ctx.fillStyle='#101b37';for(let i=0;i<14;i++){let x=i*W/13,bh=35+(i*29)%95;ctx.fillRect(x,H*.48-bh,W/14-3,bh);}
+   ctx.fillStyle='#0d1429';ctx.beginPath();ctx.moveTo(W*.08,0);ctx.lineTo(W*.92,0);ctx.lineTo(W*.98,H);ctx.lineTo(W*.02,H);ctx.fill();
+   ctx.setLineDash([22,20]);ctx.lineDashOffset=-roadOffset;ctx.strokeStyle='#29385a';for(let lane=0;lane<2;lane++){let x=W*(.36+lane*.28);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}ctx.setLineDash([]);
+   ctx.save();ctx.shadowBlur=22;ctx.shadowColor='#4df5ff';ctx.fillStyle='#4df5ff';let x=laneX(1),y=H*.79,r=Math.max(10,W*.027);ctx.beginPath();ctx.moveTo(x,y-r*1.5);ctx.lineTo(x+r,y+r);ctx.lineTo(x,y+r*.55);ctx.lineTo(x-r,y+r);ctx.closePath();ctx.fill();ctx.restore();
+   requestAnimationFrame(idle);
+ }
+ idle();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
